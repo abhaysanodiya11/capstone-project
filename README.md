@@ -471,3 +471,4 @@ You’ve successfully deployed a **production-grade DevOps Accelerator**, with:
 *  Frontend hosted via S3 + CloudFront
 *  Monitoring + Email notifications via CloudWatch + SNS
 
+# capstone-project
