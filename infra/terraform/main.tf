@@ -74,7 +74,7 @@ resource "aws_lambda_function" "process_uploaded_file" {
   environment {
     variables = {
       UPLOAD_BUCKET = aws_s3_bucket.upload_bucket.bucket
-      SNS_TOPIC_ARN = aws_sns_topic.devops_accelerator_upload_notify.arn
+      SNS_TOPIC_ARN = ""
     }
   }
 }
