@@ -15,6 +15,13 @@ provider "aws" {
 }
 
 # -----------------------------
+# RANDOM ID (for unique buckets)
+# -----------------------------
+resource "random_id" "bucket_id" {
+  byte_length = 4
+}
+
+# -----------------------------
 # IAM roles for Lambda
 # -----------------------------
 
@@ -23,15 +30,13 @@ resource "aws_iam_role" "lambda_exec_role" {
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
-    Statement = [
-      {
-        Action = "sts:AssumeRole",
-        Effect = "Allow",
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
+    Statement = [{
+      Action = "sts:AssumeRole",
+      Effect = "Allow",
+      Principal = {
+        Service = "lambda.amazonaws.com"
       }
-    ]
+    }]
   })
 }
 
@@ -50,7 +55,7 @@ resource "aws_iam_role_policy_attachment" "s3_access" {
 # -----------------------------
 
 resource "aws_s3_bucket" "upload_bucket" {
-  bucket = "upload-bucket-${random_id.bucket_id.hex}"
+  bucket        = "upload-bucket-${random_id.bucket_id.hex}"
   force_destroy = true
 }
 
@@ -94,11 +99,11 @@ resource "aws_lambda_permission" "allow_s3" {
 }
 
 # -----------------------------
-# Frontend Hosting (S3 + CloudFront)
+# Frontend Hosting
 # -----------------------------
 
 resource "aws_s3_bucket" "frontend_bucket" {
-  bucket = "frontend-bucket-${random_id.bucket_id.hex}"
+  bucket        = "frontend-bucket-${random_id.bucket_id.hex}"
   force_destroy = true
 
   tags = {
@@ -106,7 +111,6 @@ resource "aws_s3_bucket" "frontend_bucket" {
   }
 }
 
-# Disable Block Public Access so bucket policy works
 resource "aws_s3_bucket_public_access_block" "frontend_bucket_public_access" {
   bucket = aws_s3_bucket.frontend_bucket.id
 
@@ -116,7 +120,6 @@ resource "aws_s3_bucket_public_access_block" "frontend_bucket_public_access" {
   restrict_public_buckets = false
 }
 
-# Static website hosting
 resource "aws_s3_bucket_website_configuration" "frontend_bucket_website" {
   bucket = aws_s3_bucket.frontend_bucket.id
 
@@ -129,102 +132,37 @@ resource "aws_s3_bucket_website_configuration" "frontend_bucket_website" {
   }
 }
 
-# Public bucket policy (depends on disabling Block Public Access first)
 resource "aws_s3_bucket_policy" "frontend_bucket_policy" {
   bucket = aws_s3_bucket.frontend_bucket.id
 
   policy = jsonencode({
     Version = "2012-10-17",
-    Statement = [
-      {
-        Sid       = "PublicReadGetObject",
-        Effect    = "Allow",
-        Principal = "*",
-        Action    = "s3:GetObject",
-        Resource  = "${aws_s3_bucket.frontend_bucket.arn}/*"
-      }
-    ]
+    Statement = [{
+      Sid       = "PublicReadGetObject",
+      Effect    = "Allow",
+      Principal = "*",
+      Action    = "s3:GetObject",
+      Resource  = "${aws_s3_bucket.frontend_bucket.arn}/*"
+    }]
   })
 
   depends_on = [aws_s3_bucket_public_access_block.frontend_bucket_public_access]
 }
 
-# CORS (optional, for presigned uploads / APIs)
-resource "aws_s3_bucket_cors_configuration" "frontend_cors" {
-  bucket = aws_s3_bucket.frontend_bucket.id
-
-  cors_rule {
-    allowed_headers = ["*"]
-    allowed_methods = ["GET", "PUT", "HEAD"]
-    allowed_origins = ["https://${aws_cloudfront_distribution.frontend_distribution.domain_name}"]
-    expose_headers  = []
-    max_age_seconds = 3000
-  }
-}
-
-# CloudFront Distribution
-resource "aws_cloudfront_distribution" "frontend_distribution" {
-  enabled             = true
-  default_root_object = "index.html"
-  price_class         = var.cloudfront_price_class
-
-  origin {
-    domain_name = aws_s3_bucket_website_configuration.frontend_bucket_website.website_endpoint
-    origin_id   = "S3-Frontend-Origin"
-
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
-  }
-
-  default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-Frontend-Origin"
-
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
-
-    viewer_protocol_policy = "redirect-to-https"
-  }
-
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-
-  tags = {
-    Name = "FrontendCDN"
-  }
-
-  depends_on = [aws_s3_bucket_policy.frontend_bucket_policy]
-}
-
 # -----------------------------
-# Lambda: Presigned URL API
+# Presign Lambda
 # -----------------------------
 
 resource "aws_iam_role" "presign_lambda_role" {
   name = "DevOps-Accelerator-Presign-Lambda-Role"
+
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow"
+      Effect = "Allow",
       Principal = {
         Service = "lambda.amazonaws.com"
-      }
+      },
       Action = "sts:AssumeRole"
     }]
   })
@@ -232,25 +170,26 @@ resource "aws_iam_role" "presign_lambda_role" {
 
 resource "aws_iam_policy" "presign_lambda_policy" {
   name = "DevOps-Accelerator-Presign-Lambda-Policy"
+
   policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [
       {
         Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
-        ]
-        Effect   = "Allow"
+        ],
+        Effect   = "Allow",
         Resource = "*"
       },
       {
         Action = [
           "s3:PutObject",
           "s3:GetObject"
-        ]
-        Effect   = "Allow"
-        Resource = "arn:aws:s3:::${var.upload_bucket_name}/*"
+        ],
+        Effect   = "Allow",
+        Resource = "${aws_s3_bucket.upload_bucket.arn}/*"
       }
     ]
   })
@@ -266,105 +205,13 @@ resource "aws_lambda_function" "presign_lambda" {
   role          = aws_iam_role.presign_lambda_role.arn
   handler       = "main.lambda_handler"
   runtime       = "python3.12"
+
   filename      = "${path.module}/../../backend/generate-presigned-url/lambda.zip"
   source_code_hash = filebase64sha256("${path.module}/../../backend/generate-presigned-url/lambda.zip")
 
   environment {
     variables = {
-      BUCKET_NAME = var.upload_bucket_name
+      BUCKET_NAME = aws_s3_bucket.upload_bucket.bucket
     }
   }
-}
-
-resource "aws_apigatewayv2_api" "presign_api" {
-  name          = "DevOps-Accelerator-Presign-API"
-  protocol_type = "HTTP"
-
-  cors_configuration {
-    allow_origins = ["*"]
-    allow_methods = ["OPTIONS", "POST"]
-    allow_headers = ["*"]
-  }
-}
-
-resource "aws_apigatewayv2_integration" "presign_api_integration" {
-  api_id             = aws_apigatewayv2_api.presign_api.id
-  integration_type   = "AWS_PROXY"
-  integration_uri    = aws_lambda_function.presign_lambda.invoke_arn
-  integration_method = "POST"
-  payload_format_version = "2.0"
-}
-
-resource "aws_apigatewayv2_route" "presign_route" {
-  api_id    = aws_apigatewayv2_api.presign_api.id
-  route_key = "POST /generate-presigned-url"
-  target    = "integrations/${aws_apigatewayv2_integration.presign_api_integration.id}"
-}
-
-resource "aws_cloudwatch_log_group" "apigw_logs" {
-  name              = "/aws/apigateway/presign-api"
-  retention_in_days = 7
-}
-
-resource "aws_apigatewayv2_stage" "presign_stage" {
-  api_id      = aws_apigatewayv2_api.presign_api.id
-  name        = "$default"
-  auto_deploy = true
-
-  default_route_settings {
-    data_trace_enabled = true
-  }
-
-  access_log_settings {
-    destination_arn = aws_cloudwatch_log_group.apigw_logs.arn
-    format = jsonencode({
-      requestId      = "$context.requestId",
-      requestTime    = "$context.requestTime",
-      httpMethod     = "$context.httpMethod",
-      path           = "$context.path",
-      status         = "$context.status"
-    })
-  }
-}
-
-resource "aws_lambda_permission" "allow_apigw_invoke_presign" {
-  statement_id  = "AllowInvokeFromAPIGatewayPresign"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.presign_lambda.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.presign_api.execution_arn}/*/*"
-}
-
-# -----------------------------
-# SNS Topic for Notifications
-# -----------------------------
-
-resource "aws_sns_topic" "devops_accelerator_upload_notify" {
-  name = "devops-accelerator-upload-notification-topic"
-}
-
-resource "aws_sns_topic_subscription" "devops_accelerator_email_sub" {
-  topic_arn = aws_sns_topic.devops_accelerator_upload_notify.arn
-  protocol  = "email"
-  endpoint  = var.notification_email
-}
-
-resource "aws_iam_policy" "devops_accelerator_lambda_sns_policy" {
-  name = "devops-accelerator-lambda-sns-publish-policy"
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect   = "Allow",
-        Action   = "sns:Publish",
-        Resource = aws_sns_topic.devops_accelerator_upload_notify.arn
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_sns_policy_attachment" {
-  role       = aws_iam_role.lambda_exec_role.name
-  policy_arn = aws_iam_policy.devops_accelerator_lambda_sns_policy.arn
 }
