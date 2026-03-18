@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+    workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
@@ -55,3 +56,7 @@ jobs:
         env:
           GZIP: "false"
         run: terraform apply -auto-approve
+
+        -name: Terraform Destroy
+  if: github.event_name == 'workflow_dispatch'
+  run: terraform destroy -auto-approve
