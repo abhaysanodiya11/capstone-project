@@ -50,7 +50,7 @@ resource "aws_iam_role_policy_attachment" "s3_access" {
 # -----------------------------
 
 resource "aws_s3_bucket" "upload_bucket" {
-  bucket        = var.upload_bucket_name
+  bucket = "upload-bucket-${random_id.bucket_id.hex}"
   force_destroy = true
 }
 
@@ -98,7 +98,7 @@ resource "aws_lambda_permission" "allow_s3" {
 # -----------------------------
 
 resource "aws_s3_bucket" "frontend_bucket" {
-  bucket        = var.frontend_bucket_name
+  bucket = "frontend-bucket-${random_id.bucket_id.hex}"
   force_destroy = true
 
   tags = {
