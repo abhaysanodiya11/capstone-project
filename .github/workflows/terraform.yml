@@ -34,17 +34,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ✅ FIXED: ZIP STEP 1
+      
       - name: Zip process-uploaded-file Lambda
         run: |
           cd ../../backend/process-uploaded-file
-          zip -r lambda.zip .
+          zip -r lambda.zip . -x "*.zip"
 
-      # ✅ FIXED: ZIP STEP 2
       - name: Zip presign Lambda
         run: |
           cd ../../backend/generate-presigned-url
-          zip -r lambda.zip .
+          zip -r lambda.zip . -x "*.zip"
 
       - name: Terraform Init (Reconfigure)
         run: terraform init -reconfigure
