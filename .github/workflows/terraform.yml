@@ -7,7 +7,6 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  TF_VAR_upload_bucket_name: ${{ secrets.UPLOAD_BUCKET_NAME }}
   TF_VAR_aws_region: us-east-1
 
 jobs:
@@ -35,15 +34,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-          - name:Zip process-uploaded-file Lambda
-  run: |
-    cd backend/process-uploaded-file
-    zip -r lambda.zip .
+      # ✅ FIXED: ZIP STEP 1
+      - name: Zip process-uploaded-file Lambda
+        run: |
+          cd ../../backend/process-uploaded-file
+          zip -r lambda.zip .
 
-    -name: Zip presign Lambda
-    run:|
-    cd backend/generate-presigned-url
-    zip -r lambda.zip .
+      # ✅ FIXED: ZIP STEP 2
+      - name: Zip presign Lambda
+        run: |
+          cd ../../backend/generate-presigned-url
+          zip -r lambda.zip .
 
       - name: Terraform Init (Reconfigure)
         run: terraform init -reconfigure
